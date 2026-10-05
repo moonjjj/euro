@@ -152,7 +152,8 @@ export default function Home() {
 
   return (
     <main
-      className="min-h-dvh bg-[#212121] overflow-x-hidden"
+      className="bg-[#212121] overflow-x-hidden"
+      style={{ minHeight: "100dvh" }}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
@@ -166,7 +167,7 @@ export default function Home() {
           }}
         >
           {currentDay.isCover ? (
-            <div className="relative w-full h-dvh">
+            <div className="relative w-full" style={{ height: "100dvh" }}>
               <Image
                 key={currentDay.id}
                 src={currentDay.image}
@@ -226,7 +227,7 @@ export default function Home() {
             }}
           >
             {peekIsCover ? (
-              <div className="relative w-full h-dvh">
+              <div className="relative w-full" style={{ height: "100dvh" }}>
                 <Image
                   src={peekDay.image}
                   alt={peekDay.label}
