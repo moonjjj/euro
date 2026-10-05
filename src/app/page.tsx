@@ -55,7 +55,21 @@ export default function Home() {
   const [slideDir, setSlideDir] = useState<"left" | "right">("right");
   const [todayIndex, setTodayIndex] = useState(-1);
   const [dday, setDday] = useState<DdayInfo | null>(null);
-  const touchRef = useRef({ startX: 0, startY: 0, locked: false });
+  const touchRef = useRef({ startX: 0, startY: 0, locked: false, isHorizontal: false });
+  const mainRef = useRef<HTMLElement>(null);
+
+  // Block vertical scroll during horizontal swipe via native event listener (needs {passive: false})
+  useEffect(() => {
+    const el = mainRef.current;
+    if (!el) return;
+    const handler = (e: TouchEvent) => {
+      if (touchRef.current.isHorizontal) {
+        e.preventDefault();
+      }
+    };
+    el.addEventListener("touchmove", handler, { passive: false });
+    return () => el.removeEventListener("touchmove", handler);
+  }, []);
 
   // Auto-focus today's schedule on mount + tick D-day every second
   useEffect(() => {
@@ -100,7 +114,7 @@ export default function Home() {
 
   const onTouchStart = (e: React.TouchEvent) => {
     if (animating) return;
-    touchRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY, locked: false };
+    touchRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY, locked: false, isHorizontal: false };
   };
 
   const onTouchMove = (e: React.TouchEvent) => {
@@ -111,7 +125,8 @@ export default function Home() {
     if (!touchRef.current.locked) {
       if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
         touchRef.current.locked = true;
-        if (Math.abs(dy) > Math.abs(dx)) return;
+        if (Math.abs(dy) > Math.abs(dx)) return; // vertical → ignore
+        touchRef.current.isHorizontal = true;
         setIsSwiping(true);
       }
       return;
@@ -124,6 +139,7 @@ export default function Home() {
   };
 
   const onTouchEnd = () => {
+    touchRef.current.isHorizontal = false;
     if (!isSwiping || animating) {
       touchRef.current.locked = false;
       return;
@@ -152,8 +168,9 @@ export default function Home() {
 
   return (
     <main
-      className="bg-[#212121] overflow-x-hidden"
-      style={{ minHeight: "100dvh" }}
+      ref={mainRef}
+      className={`bg-[#212121] overflow-x-hidden ${currentDay.isCover ? "h-[100vh] overflow-hidden" : ""}`}
+      style={{ minHeight: currentDay.isCover ? undefined : "100dvh" }}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
@@ -167,7 +184,7 @@ export default function Home() {
           }}
         >
           {currentDay.isCover ? (
-            <div className="relative w-full" style={{ height: "100dvh" }}>
+            <div className="relative w-full" style={{ height: "100vh" }}>
               <Image
                 key={currentDay.id}
                 src={currentDay.image}
@@ -227,7 +244,7 @@ export default function Home() {
             }}
           >
             {peekIsCover ? (
-              <div className="relative w-full" style={{ height: "100dvh" }}>
+              <div className="relative w-full" style={{ height: "100vh" }}>
                 <Image
                   src={peekDay.image}
                   alt={peekDay.label}
@@ -251,10 +268,13 @@ export default function Home() {
         )}
       </div>
 
-      {/* Bottom spacer */}
-      <div className="h-28" />
-
-      <WeatherIsland city={currentDay.city} />
+      {/* Bottom spacer — hide on cover */}
+      {!currentDay.isCover && (
+        <>
+          <div className="h-28" />
+          <WeatherIsland city={currentDay.city} />
+        </>
+      )}
       <Island days={DAYS} current={current} onSelect={goTo} slideDir={slideDir} todayIndex={todayIndex} />
     </main>
   );
