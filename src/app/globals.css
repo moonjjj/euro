@@ -14,6 +14,8 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
+  max-width: 430px;
+  margin: 0 auto;
 }
 
 .safe-bottom {
