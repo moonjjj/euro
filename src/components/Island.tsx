@@ -13,6 +13,8 @@ interface IslandProps {
   days: DayInfo[];
   current: number;
   onSelect: (index: number) => void;
+  onPrev: () => void;
+  onNext: () => void;
   slideDir: "left" | "right";
   todayIndex: number;
 }
@@ -45,7 +47,7 @@ function FlagBadge({ flag, slideDir }: { flag: string; slideDir?: "left" | "righ
 // Close: expanded → dropping → shrinking → collapsed
 type Phase = "collapsed" | "stretching" | "expanded" | "dropping" | "shrinking";
 
-export default function Island({ days, current, onSelect, slideDir, todayIndex }: IslandProps) {
+export default function Island({ days, current, onSelect, onPrev, onNext, slideDir, todayIndex }: IslandProps) {
   const [phase, setPhase] = useState<Phase>("collapsed");
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState(0);
@@ -133,8 +135,31 @@ export default function Island({ days, current, onSelect, slideDir, todayIndex }
     }
   };
 
+  const hasPrev = current > 0;
+  const hasNext = current < days.length - 1;
+  const showNavButtons = phase === "collapsed" || phase === "shrinking";
+
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 flex justify-center pb-8 px-5 pointer-events-none">
+    <div className="fixed bottom-0 left-0 right-0 z-50 flex items-end justify-center pb-8 px-5 pointer-events-none">
+      {/* Prev button */}
+      <button
+        onClick={onPrev}
+        className="pointer-events-auto flex items-center justify-center w-12 h-12 rounded-full bg-[#1c1c1e]/70 border border-white/[0.06] mr-3 active:scale-90 shrink-0"
+        style={{
+          WebkitBackdropFilter: "blur(50px) saturate(180%)",
+          backdropFilter: "blur(50px) saturate(180%)",
+          boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
+          opacity: showNavButtons && hasPrev ? 1 : 0,
+          transform: showNavButtons && hasPrev ? "scale(1)" : "scale(0.5)",
+          transition: "opacity 0.3s ease, transform 0.3s ease",
+          pointerEvents: showNavButtons && hasPrev ? "auto" : "none",
+        }}
+      >
+        <svg className="w-5 h-5 text-white/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H5m0 0l6-6m-6 6l6 6" />
+        </svg>
+      </button>
+
       <div
         data-island
         className="pointer-events-auto overflow-hidden bg-[#1c1c1e]/70 border border-white/[0.06]"
@@ -260,6 +285,25 @@ export default function Island({ days, current, onSelect, slideDir, todayIndex }
           </div>
         </div>
       </div>
+
+      {/* Next button */}
+      <button
+        onClick={onNext}
+        className="pointer-events-auto flex items-center justify-center w-12 h-12 rounded-full bg-[#1c1c1e]/70 border border-white/[0.06] ml-3 active:scale-90 shrink-0"
+        style={{
+          WebkitBackdropFilter: "blur(50px) saturate(180%)",
+          backdropFilter: "blur(50px) saturate(180%)",
+          boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
+          opacity: showNavButtons && hasNext ? 1 : 0,
+          transform: showNavButtons && hasNext ? "scale(1)" : "scale(0.5)",
+          transition: "opacity 0.3s ease, transform 0.3s ease",
+          pointerEvents: showNavButtons && hasNext ? "auto" : "none",
+        }}
+      >
+        <svg className="w-5 h-5 text-white/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14m0 0l-6-6m6 6l-6 6" />
+        </svg>
+      </button>
     </div>
   );
 }

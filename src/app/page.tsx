@@ -95,22 +95,45 @@ export default function Home() {
     [current, animating]
   );
 
-  const snapTo = (targetIndex: number) => {
+  const SLIDE_DURATION = 420;
+  const SLIDE_EASE = "cubic-bezier(0.25, 1, 0.5, 1)";
+
+  const snapTo = useCallback((targetIndex: number) => {
+    if (animating) return;
     const w = window.innerWidth;
     const dir = targetIndex > current ? -1 : 1;
     const nextDir = targetIndex > current ? "left" : "right";
-    setAnimating(true);
-    setOffsetX(dir * w);
 
-    setTimeout(() => {
-      setSlideDir(nextDir);
-      setCurrent(targetIndex);
-      setOffsetX(0);
-      setIsSwiping(false);
-      setAnimating(false);
-      window.scrollTo({ top: 0, behavior: "instant" });
-    }, 300);
-  };
+    const alreadySwiping = isSwiping;
+    setAnimating(true);
+    setIsSwiping(true);
+
+    if (alreadySwiping) {
+      setOffsetX(dir * w);
+      setTimeout(() => {
+        setSlideDir(nextDir);
+        setCurrent(targetIndex);
+        setOffsetX(0);
+        setIsSwiping(false);
+        setAnimating(false);
+        window.scrollTo({ top: 0, behavior: "instant" });
+      }, SLIDE_DURATION);
+    } else {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setOffsetX(dir * w);
+          setTimeout(() => {
+            setSlideDir(nextDir);
+            setCurrent(targetIndex);
+            setOffsetX(0);
+            setIsSwiping(false);
+            setAnimating(false);
+            window.scrollTo({ top: 0, behavior: "instant" });
+          }, SLIDE_DURATION);
+        });
+      });
+    }
+  }, [current, animating, isSwiping]);
 
   const onTouchStart = (e: React.TouchEvent) => {
     if (animating) return;
@@ -157,7 +180,7 @@ export default function Home() {
       setTimeout(() => {
         setAnimating(false);
         setIsSwiping(false);
-      }, 300);
+      }, SLIDE_DURATION);
     }
   };
 
@@ -180,7 +203,7 @@ export default function Home() {
         <div
           style={{
             transform: `translateX(${offsetX}px)`,
-            transition: animating ? "transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)" : "none",
+            transition: animating ? `transform ${SLIDE_DURATION}ms ${SLIDE_EASE}` : "none",
           }}
         >
           {currentDay.isCover ? (
@@ -240,7 +263,7 @@ export default function Home() {
               left: offsetX < 0 ? "100%" : undefined,
               right: offsetX > 0 ? "100%" : undefined,
               transform: `translateX(${offsetX}px)`,
-              transition: animating ? "transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)" : "none",
+              transition: animating ? `transform ${SLIDE_DURATION}ms ${SLIDE_EASE}` : "none",
             }}
           >
             {peekIsCover ? (
@@ -275,7 +298,15 @@ export default function Home() {
           <WeatherIsland city={currentDay.city} />
         </>
       )}
-      <Island days={DAYS} current={current} onSelect={goTo} slideDir={slideDir} todayIndex={todayIndex} />
+      <Island
+        days={DAYS}
+        current={current}
+        onSelect={goTo}
+        onPrev={() => { if (current > 0) snapTo(current - 1); }}
+        onNext={() => { if (current < DAYS.length - 1) snapTo(current + 1); }}
+        slideDir={slideDir}
+        todayIndex={todayIndex}
+      />
     </main>
   );
 }
