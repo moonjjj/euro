@@ -50,8 +50,9 @@ const glassFallback: React.CSSProperties = {
   backdropFilter: "blur(50px) saturate(180%)",
 };
 
-const BAR_HEIGHT = 64;
+const BAR_HEIGHT = 56;
 const NAV_SIZE = BAR_HEIGHT + 2;
+const NAV_GAP = 8;
 
 // Open:  collapsed → stretching → expanded
 // Close: expanded → dropping → shrinking → collapsed
@@ -101,7 +102,8 @@ export default function Island({ days, current, onSelect, onPrev, onNext, slideD
   }, [phase, collapse]);
 
   const wide = "min(340px, calc(100vw - 40px))";
-  const pill = "280px";
+  // Leave room for both arrow slots so the pill never gets squeezed on narrow phones
+  const pill = `min(280px, calc(100vw - 40px - ${2 * (NAV_SIZE + NAV_GAP)}px))`;
   const spring = "cubic-bezier(0.34, 1.56, 0.64, 1)";
   const smooth = "cubic-bezier(0.4, 0, 0.2, 1)";
 
@@ -151,11 +153,13 @@ export default function Island({ days, current, onSelect, onPrev, onNext, slideD
 
   // Arrows match the island's outer height (bar + 1px border top/bottom) and
   // slide out sideways, collapsing their width, while the island is open.
-  const navStyle = (visible: boolean, side: -1 | 1): React.CSSProperties => ({
-    width: visible ? NAV_SIZE : 0,
+  // `occupy` keeps the slot while collapsed (so first/last pages stay centered);
+  // `visible` hides the arrow itself when there is no prev/next day.
+  const navStyle = (occupy: boolean, visible: boolean, side: -1 | 1): React.CSSProperties => ({
+    width: occupy ? NAV_SIZE : 0,
     height: NAV_SIZE,
-    [side < 0 ? "marginRight" : "marginLeft"]: visible ? 12 : 0,
-    borderWidth: visible ? 1 : 0,
+    [side < 0 ? "marginRight" : "marginLeft"]: occupy ? NAV_GAP : 0,
+    borderWidth: occupy ? 1 : 0,
     boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
     opacity: visible ? 1 : 0,
     transform: visible ? "translateX(0) scale(1)" : `translateX(${side * 32}px) scale(0.5)`,
@@ -178,7 +182,7 @@ export default function Island({ days, current, onSelect, onPrev, onNext, slideD
         className="pointer-events-auto flex items-center justify-center rounded-full border-white/[0.06] overflow-hidden active:scale-90 shrink-0"
         fallbackStyle={glassFallback}
         shade={0.45}
-        style={navStyle(showNavButtons && hasPrev, -1)}
+        style={navStyle(showNavButtons, showNavButtons && hasPrev, -1)}
       >
         <svg className="w-5 h-5 text-white/90" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H5m0 0l6-6m-6 6l6 6" />
@@ -204,23 +208,26 @@ export default function Island({ days, current, onSelect, onPrev, onNext, slideD
         {/* Pill bar */}
         <button
           onClick={toggle}
-          className="flex items-center gap-3 px-6 w-full active:opacity-70 transition-opacity"
+          className="flex items-center gap-2 px-4 w-full min-w-0 active:opacity-70 transition-opacity"
           style={{ height: BAR_HEIGHT }}
         >
           <FlagBadge key={current} flag={currentDay.flag} slideDir={slideDir} />
-          <span className="text-white text-[13px] font-semibold tracking-tight">
+          <span className="text-white text-[13px] font-semibold tracking-tight whitespace-nowrap shrink-0">
             {currentDay.label}
           </span>
-          <span className="text-white/70 text-xs whitespace-nowrap">
+          <span className="text-white/70 text-xs whitespace-nowrap truncate min-w-0">
             {formatShort(currentDay.date)} ({getWeekday(currentDay.date)})
           </span>
           {current === todayIndex && (
             <span
-              className="text-[10px] font-semibold text-[#00FF66] bg-[#00FF66]/10 px-1.5 py-0.5 rounded-md whitespace-nowrap overflow-hidden"
+              className="text-[10px] font-semibold text-[#00FF66] bg-[#00FF66]/10 py-0.5 rounded-md whitespace-nowrap overflow-hidden shrink-0"
               style={{
+                // Fully collapse (padding + flex gap too) so the date keeps its room
                 maxWidth: phase === "shrinking" || phase === "collapsed" ? "0px" : "40px",
+                paddingInline: phase === "shrinking" || phase === "collapsed" ? 0 : 6,
+                marginLeft: phase === "shrinking" || phase === "collapsed" ? -8 : 0,
                 opacity: phase === "shrinking" || phase === "collapsed" ? 0 : 1,
-                transition: "max-width 0.3s ease, opacity 0.2s ease",
+                transition: "max-width 0.3s ease, padding 0.3s ease, margin 0.3s ease, opacity 0.2s ease",
               }}
             >
               오늘
@@ -322,7 +329,7 @@ export default function Island({ days, current, onSelect, onPrev, onNext, slideD
         className="pointer-events-auto flex items-center justify-center rounded-full border-white/[0.06] overflow-hidden active:scale-90 shrink-0"
         fallbackStyle={glassFallback}
         shade={0.45}
-        style={navStyle(showNavButtons && hasNext, 1)}
+        style={navStyle(showNavButtons, showNavButtons && hasNext, 1)}
       >
         <svg className="w-5 h-5 text-white/90" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14m0 0l-6-6m6 6l-6 6" />
