@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import LiquidGlass from "./LiquidGlass";
 
 interface DayInfo {
   id: number;
@@ -42,6 +43,15 @@ function FlagBadge({ flag, slideDir }: { flag: string; slideDir?: "left" | "righ
     </span>
   );
 }
+
+const glassFallback: React.CSSProperties = {
+  background: "rgba(28,28,30,0.7)",
+  WebkitBackdropFilter: "blur(50px) saturate(180%)",
+  backdropFilter: "blur(50px) saturate(180%)",
+};
+
+const BAR_HEIGHT = 64;
+const NAV_SIZE = BAR_HEIGHT + 2;
 
 // Open:  collapsed → stretching → expanded
 // Close: expanded → dropping → shrinking → collapsed
@@ -139,34 +149,50 @@ export default function Island({ days, current, onSelect, onPrev, onNext, slideD
   const hasNext = current < days.length - 1;
   const showNavButtons = phase === "collapsed" || phase === "shrinking";
 
+  // Arrows match the island's outer height (bar + 1px border top/bottom) and
+  // slide out sideways, collapsing their width, while the island is open.
+  const navStyle = (visible: boolean, side: -1 | 1): React.CSSProperties => ({
+    width: visible ? NAV_SIZE : 0,
+    height: NAV_SIZE,
+    [side < 0 ? "marginRight" : "marginLeft"]: visible ? 12 : 0,
+    borderWidth: visible ? 1 : 0,
+    boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
+    opacity: visible ? 1 : 0,
+    transform: visible ? "translateX(0) scale(1)" : `translateX(${side * 32}px) scale(0.5)`,
+    visibility: visible ? "visible" : "hidden",
+    pointerEvents: visible ? "auto" : "none",
+    transition: `width 0.35s ${smooth}, margin 0.35s ${smooth}, border-width 0.35s ${smooth}, opacity 0.25s ease, transform 0.35s ${smooth}, visibility 0s linear ${visible ? "0s" : "0.35s"}`,
+  });
+
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 flex items-end justify-center pb-8 px-5 pointer-events-none">
+    <div
+      className="fixed bottom-0 left-0 right-0 z-50 flex items-end justify-center pb-8 px-5 pointer-events-none"
+      style={{ textShadow: "0 1px 3px rgba(0,0,0,0.45)" }}
+    >
       {/* Prev button */}
-      <button
+      <LiquidGlass
+        as="button"
         onClick={onPrev}
-        className="pointer-events-auto flex items-center justify-center w-12 h-12 rounded-full bg-[#1c1c1e]/70 border border-white/[0.06] mr-3 active:scale-90 shrink-0"
-        style={{
-          WebkitBackdropFilter: "blur(50px) saturate(180%)",
-          backdropFilter: "blur(50px) saturate(180%)",
-          boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
-          opacity: showNavButtons && hasPrev ? 1 : 0,
-          transform: showNavButtons && hasPrev ? "scale(1)" : "scale(0.5)",
-          transition: "opacity 0.3s ease, transform 0.3s ease",
-          pointerEvents: showNavButtons && hasPrev ? "auto" : "none",
-        }}
+        aria-hidden={!(showNavButtons && hasPrev)}
+        tabIndex={showNavButtons && hasPrev ? 0 : -1}
+        className="pointer-events-auto flex items-center justify-center rounded-full border-white/[0.06] overflow-hidden active:scale-90 shrink-0"
+        fallbackStyle={glassFallback}
+        shade={0.45}
+        style={navStyle(showNavButtons && hasPrev, -1)}
       >
-        <svg className="w-5 h-5 text-white/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <svg className="w-5 h-5 text-white/90" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H5m0 0l6-6m-6 6l6 6" />
         </svg>
-      </button>
+      </LiquidGlass>
 
-      <div
+      <LiquidGlass
         data-island
-        className="pointer-events-auto overflow-hidden bg-[#1c1c1e]/70 border border-white/[0.06]"
+        className="pointer-events-auto overflow-hidden border border-white/[0.06]"
+        fallbackStyle={glassFallback}
+        shade={0.45}
+        blur={9}
         style={{
           ...getStyle(),
-          WebkitBackdropFilter: "blur(50px) saturate(180%)",
-          backdropFilter: "blur(50px) saturate(180%)",
           boxShadow: phase === "expanded"
             ? "0 20px 60px rgba(0,0,0,0.85), 0 0 0 0.5px rgba(255,255,255,0.08)"
             : phase === "stretching" || phase === "dropping"
@@ -178,13 +204,14 @@ export default function Island({ days, current, onSelect, onPrev, onNext, slideD
         {/* Pill bar */}
         <button
           onClick={toggle}
-          className="flex items-center gap-3 px-6 py-4 w-full active:opacity-70 transition-opacity"
+          className="flex items-center gap-3 px-6 w-full active:opacity-70 transition-opacity"
+          style={{ height: BAR_HEIGHT }}
         >
           <FlagBadge key={current} flag={currentDay.flag} slideDir={slideDir} />
           <span className="text-white text-[13px] font-semibold tracking-tight">
             {currentDay.label}
           </span>
-          <span className="text-white/35 text-xs whitespace-nowrap">
+          <span className="text-white/70 text-xs whitespace-nowrap">
             {formatShort(currentDay.date)} ({getWeekday(currentDay.date)})
           </span>
           {current === todayIndex && (
@@ -200,7 +227,7 @@ export default function Island({ days, current, onSelect, onPrev, onNext, slideD
             </span>
           )}
           <svg
-            className="w-3 h-3 text-white/25 ml-auto shrink-0"
+            className="w-3 h-3 text-white/60 ml-auto shrink-0"
             style={{
               transform: isWide ? "rotate(180deg)" : "rotate(0deg)",
               transition: "transform 0.5s cubic-bezier(0.32, 0.72, 0, 1)",
@@ -259,7 +286,7 @@ export default function Island({ days, current, onSelect, onPrev, onNext, slideD
                       <div className="flex items-center gap-1.5">
                         <span
                           className={`text-[13px] font-medium ${
-                            isActive ? "text-white" : "text-white/40"
+                            isActive ? "text-white" : "text-white/75"
                           }`}
                         >
                           {day.label}
@@ -270,7 +297,7 @@ export default function Island({ days, current, onSelect, onPrev, onNext, slideD
                           </span>
                         )}
                       </div>
-                      <span className="text-[10px] text-white/25">
+                      <span className="text-[10px] text-white/60">
                         {formatShort(day.date)} ({getWeekday(day.date)})
                       </span>
                     </div>
@@ -284,26 +311,23 @@ export default function Island({ days, current, onSelect, onPrev, onNext, slideD
             </div>
           </div>
         </div>
-      </div>
+      </LiquidGlass>
 
       {/* Next button */}
-      <button
+      <LiquidGlass
+        as="button"
         onClick={onNext}
-        className="pointer-events-auto flex items-center justify-center w-12 h-12 rounded-full bg-[#1c1c1e]/70 border border-white/[0.06] ml-3 active:scale-90 shrink-0"
-        style={{
-          WebkitBackdropFilter: "blur(50px) saturate(180%)",
-          backdropFilter: "blur(50px) saturate(180%)",
-          boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
-          opacity: showNavButtons && hasNext ? 1 : 0,
-          transform: showNavButtons && hasNext ? "scale(1)" : "scale(0.5)",
-          transition: "opacity 0.3s ease, transform 0.3s ease",
-          pointerEvents: showNavButtons && hasNext ? "auto" : "none",
-        }}
+        aria-hidden={!(showNavButtons && hasNext)}
+        tabIndex={showNavButtons && hasNext ? 0 : -1}
+        className="pointer-events-auto flex items-center justify-center rounded-full border-white/[0.06] overflow-hidden active:scale-90 shrink-0"
+        fallbackStyle={glassFallback}
+        shade={0.45}
+        style={navStyle(showNavButtons && hasNext, 1)}
       >
-        <svg className="w-5 h-5 text-white/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <svg className="w-5 h-5 text-white/90" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14m0 0l-6-6m6 6l-6 6" />
         </svg>
-      </button>
+      </LiquidGlass>
     </div>
   );
 }

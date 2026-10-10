@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import LiquidGlass from "./LiquidGlass";
 
 export interface CityInfo {
   name: string;
@@ -193,14 +194,20 @@ export default function WeatherIsland({ city }: WeatherIslandProps) {
         right: "14px",
       }}
     >
-      <div
-        className="cursor-pointer overflow-hidden bg-[#000]/80 border border-white/[0.06]"
+      <LiquidGlass
+        className="cursor-pointer overflow-hidden border border-white/[0.06]"
+        fallbackStyle={{
+          background: "rgba(0,0,0,0.8)",
+          WebkitBackdropFilter: "blur(40px) saturate(180%)",
+          backdropFilter: "blur(40px) saturate(180%)",
+        }}
+        shade={0.45}
+        blur={9}
         style={{
           borderRadius: expanded ? "22px" : "50%",
           width: expanded ? "min(320px, calc(100vw - 28px))" : "44px",
           height: expanded ? "auto" : "44px",
-          WebkitBackdropFilter: "blur(40px) saturate(180%)",
-          backdropFilter: "blur(40px) saturate(180%)",
+          textShadow: "0 1px 3px rgba(0,0,0,0.45)",
           boxShadow: expanded
             ? "0 12px 40px rgba(0,0,0,0.7), 0 0 0 0.5px rgba(255,255,255,0.08)"
             : "0 4px 16px rgba(0,0,0,0.5)",
@@ -234,7 +241,7 @@ export default function WeatherIsland({ city }: WeatherIslandProps) {
             {/* Header: city + time + current weather */}
             <div className="px-4 pt-3 pb-2" onClick={() => setExpanded(false)}>
               <div className="flex items-center justify-between mb-1">
-                <span className="text-white/50 text-[10px] font-medium tracking-wide uppercase">
+                <span className="text-white/75 text-[10px] font-medium tracking-wide uppercase">
                   {city.name}
                 </span>
                 <span className="text-white text-[13px] font-semibold tabular-nums">
@@ -247,13 +254,13 @@ export default function WeatherIsland({ city }: WeatherIslandProps) {
                   <span className="text-white text-[22px] font-semibold leading-tight">
                     {weather.temperature}°
                   </span>
-                  <span className="text-white/40 text-[11px]">{info.label}</span>
+                  <span className="text-white/70 text-[11px]">{info.label}</span>
                 </div>
               )}
               {loading && !weather && (
                 <div className="flex items-center gap-2 py-1">
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white/80 rounded-full animate-spin" />
-                  <span className="text-white/40 text-xs">로딩 중...</span>
+                  <span className="text-white/70 text-xs">로딩 중...</span>
                 </div>
               )}
             </div>
@@ -280,14 +287,14 @@ export default function WeatherIsland({ city }: WeatherIslandProps) {
                       key={i}
                       className="flex flex-col items-center shrink-0 px-2.5 gap-1.5"
                       style={{
-                        opacity: h.isNow ? 1 : 0.6,
+                        opacity: h.isNow ? 1 : 0.8,
                       }}
                     >
                       <span
                         className={`text-[10px] tabular-nums ${
                           h.isNow
                             ? "text-[#00FF66] font-semibold"
-                            : "text-white/50 font-medium"
+                            : "text-white/70 font-medium"
                         }`}
                       >
                         {h.isNow ? "지금" : h.hour.replace(":00", "시")}
@@ -307,7 +314,7 @@ export default function WeatherIsland({ city }: WeatherIslandProps) {
             )}
           </div>
         )}
-      </div>
+      </LiquidGlass>
     </div>
   );
 }

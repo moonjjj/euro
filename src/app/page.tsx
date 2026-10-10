@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useState, useRef, useCallback, useEffect } from "react";
 import Island from "@/components/Island";
 import WeatherIsland, { type CityInfo } from "@/components/WeatherIsland";
+import LiquidGlass from "@/components/LiquidGlass";
 
 const TARGET_DATE = "2026-12-04";
 const TARGET_TIME = "2026-12-04T13:00:00+09:00"; // 12월 4일 오후 1시 KST
@@ -210,6 +211,7 @@ export default function Home() {
             <div className="relative w-full" style={{ height: "100vh" }}>
               <Image
                 key={currentDay.id}
+                data-glass-source
                 src={currentDay.image}
                 alt={currentDay.label}
                 fill
@@ -219,8 +221,10 @@ export default function Home() {
               />
               {/* Dynamic Island D-day */}
               {dday !== null && (
-                <div className="absolute top-0 left-0 right-0 flex justify-center pt-[14px] z-10">
-                  <div className="dday-island">
+                <div className="absolute top-0 left-0 right-0 flex justify-center z-10"
+                  style={{ paddingTop: "max(14px, calc(env(safe-area-inset-top, 0px) + 8px))" }}
+                >
+                  <LiquidGlass className="dday-island" fallbackStyle={{ background: "#000" }} shade={0.45} blur={9}>
                     {dday.total <= 0 ? (
                       <span className="dday-label">
                         {dday.days === 0 && dday.hours === 0 && dday.minutes === 0
@@ -235,13 +239,14 @@ export default function Home() {
                         </span>
                       </div>
                     )}
-                  </div>
+                  </LiquidGlass>
                 </div>
               )}
             </div>
           ) : (
             <Image
               key={currentDay.id}
+              data-glass-source
               src={currentDay.image}
               alt={currentDay.label}
               width={750}
@@ -269,7 +274,8 @@ export default function Home() {
             {peekIsCover ? (
               <div className="relative w-full" style={{ height: "100vh" }}>
                 <Image
-                  src={peekDay.image}
+                  data-glass-source
+                src={peekDay.image}
                   alt={peekDay.label}
                   fill
                   sizes="100vw"
@@ -278,6 +284,7 @@ export default function Home() {
               </div>
             ) : (
               <Image
+                data-glass-source
                 src={peekDay.image}
                 alt={peekDay.label}
                 width={750}
