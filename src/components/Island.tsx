@@ -208,7 +208,7 @@ export default function Island({ days, current, onSelect, onPrev, onNext, slideD
         {/* Pill bar */}
         <button
           onClick={toggle}
-          className="flex items-center gap-2 px-4 w-full min-w-0 active:opacity-70 transition-opacity"
+          className="flex items-center gap-2 px-4 w-full min-w-0 active:opacity-70 transition-opacity overflow-hidden"
           style={{ height: BAR_HEIGHT }}
         >
           <FlagBadge key={current} flag={currentDay.flag} slideDir={slideDir} />
@@ -262,7 +262,7 @@ export default function Island({ days, current, onSelect, onPrev, onNext, slideD
           <div ref={contentRef} className="px-4 pb-4">
             <div className="h-px bg-white/[0.06] mb-3" />
 
-            <div className="space-y-0.5">
+            <div className="space-y-0.5 overflow-y-auto overscroll-contain" style={{ maxHeight: "45vh", scrollbarWidth: "none", msOverflowStyle: "none" } as React.CSSProperties}>
               {days.map((day, i) => {
                 const isActive = i === current;
                 const isToday = i === todayIndex;

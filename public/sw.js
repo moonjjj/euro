@@ -1,4 +1,4 @@
-const CACHE_NAME = "euro-trip-v1";
+const CACHE_NAME = "euro-trip-v2";
 
 const PRECACHE_URLS = [
   "/",
@@ -6,6 +6,19 @@ const PRECACHE_URLS = [
   "/images/day_1.jpg",
   "/images/day_2.jpg",
   "/images/day_3.jpg",
+  "/images/day_4.jpg",
+  "/images/day_5.jpg",
+  "/images/day_6.jpg",
+  "/images/day_7.jpg",
+  "/images/day_8.jpg",
+  "/images/day_9.jpg",
+  "/images/day_10.jpg",
+  "/images/day_11.jpg",
+  "/images/day_12.jpg",
+  "/images/day_13.jpg",
+  "/images/day_14.jpg",
+  "/images/day_15.jpg",
+  "/images/day_16.jpg",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
 ];

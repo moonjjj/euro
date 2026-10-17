@@ -12,6 +12,12 @@ const TARGET_TIME = "2026-12-04T13:00:00+09:00"; // 12월 4일 오후 1시 KST
 const CITIES: Record<string, CityInfo> = {
   seoul: { name: "Seoul", timezone: "Asia/Seoul", lat: 37.5665, lon: 126.978 },
   lisbon: { name: "Lisbon", timezone: "Europe/Lisbon", lat: 38.7223, lon: -9.1393 },
+  porto: { name: "Porto", timezone: "Europe/Lisbon", lat: 41.1579, lon: -8.6291 },
+  paris: { name: "Paris", timezone: "Europe/Paris", lat: 48.8566, lon: 2.3522 },
+  switzerland: { name: "Switzerland", timezone: "Europe/Zurich", lat: 46.9480, lon: 7.4474 },
+  milan: { name: "Milan", timezone: "Europe/Rome", lat: 45.4642, lon: 9.1900 },
+  florence: { name: "Florence", timezone: "Europe/Rome", lat: 43.7696, lon: 11.2558 },
+  rome: { name: "Rome", timezone: "Europe/Rome", lat: 41.9028, lon: 12.4964 },
 };
 
 const DAYS = [
@@ -19,6 +25,19 @@ const DAYS = [
   { id: 1, image: "/images/day_1.jpg", label: "Day 1", date: "2026-12-04", flag: "🇰🇷", isCover: false, city: CITIES.seoul },
   { id: 2, image: "/images/day_2.jpg", label: "Day 2", date: "2026-12-05", flag: "🇵🇹", isCover: false, city: CITIES.lisbon },
   { id: 3, image: "/images/day_3.jpg", label: "Day 3", date: "2026-12-06", flag: "🇵🇹", isCover: false, city: CITIES.lisbon },
+  { id: 4, image: "/images/day_4.jpg", label: "Day 4", date: "2026-12-07", flag: "🇵🇹", isCover: false, city: CITIES.porto },
+  { id: 5, image: "/images/day_5.jpg", label: "Day 5", date: "2026-12-08", flag: "🇵🇹", isCover: false, city: CITIES.porto },
+  { id: 6, image: "/images/day_6.jpg", label: "Day 6", date: "2026-12-09", flag: "🇵🇹", isCover: false, city: CITIES.porto },
+  { id: 7, image: "/images/day_7.jpg", label: "Day 7", date: "2026-12-10", flag: "🇫🇷", isCover: false, city: CITIES.paris },
+  { id: 8, image: "/images/day_8.jpg", label: "Day 8", date: "2026-12-11", flag: "🇫🇷", isCover: false, city: CITIES.paris },
+  { id: 9, image: "/images/day_9.jpg", label: "Day 9", date: "2026-12-12", flag: "🇫🇷", isCover: false, city: CITIES.paris },
+  { id: 10, image: "/images/day_10.jpg", label: "Day 10", date: "2026-12-13", flag: "🇫🇷", isCover: false, city: CITIES.paris },
+  { id: 11, image: "/images/day_11.jpg", label: "Day 11", date: "2026-12-14", flag: "🇨🇭", isCover: false, city: CITIES.switzerland },
+  { id: 12, image: "/images/day_12.jpg", label: "Day 12", date: "2026-12-15", flag: "🇨🇭", isCover: false, city: CITIES.switzerland },
+  { id: 13, image: "/images/day_13.jpg", label: "Day 13", date: "2026-12-16", flag: "🇮🇹", isCover: false, city: CITIES.milan },
+  { id: 14, image: "/images/day_14.jpg", label: "Day 14", date: "2026-12-17", flag: "🇮🇹", isCover: false, city: CITIES.florence },
+  { id: 15, image: "/images/day_15.jpg", label: "Day 15", date: "2026-12-18", flag: "🇮🇹", isCover: false, city: CITIES.rome },
+  { id: 16, image: "/images/day_16.jpg", label: "Day 16", date: "2026-12-19", flag: "🇮🇹", isCover: false, city: CITIES.rome },
 ];
 
 interface DdayInfo {
