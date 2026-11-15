@@ -23,6 +23,69 @@ body {
   margin: 0 auto;
 }
 
+/* Motion: springs as closed-form step responses sampled into linear().
+   Params (response, damping) → settle time. Durations live in src/lib/motion.ts.
+   morph  0.50s ζ0.82 → 690ms, 1.1% overshoot (shape morphs)
+   snappy 0.32s ζ0.86 → 450ms, 0.5% overshoot (small controls)
+   soft   0.36s ζ1.00 → 530ms, no overshoot (slides, trailing edges) */
+:root {
+  --spring-morph: cubic-bezier(0.2, 0.9, 0.25, 1);
+  --spring-snappy: cubic-bezier(0.2, 0.9, 0.25, 1);
+  --spring-soft: cubic-bezier(0.25, 0.8, 0.3, 1);
+}
+
+@supports (transition-timing-function: linear(0, 1)) {
+  :root {
+    --spring-morph: linear(0, 0.0209, 0.0741, 0.1478, 0.2331, 0.323, 0.4127, 0.4987, 0.5787, 0.6514, 0.7161, 0.7726, 0.8211, 0.8622, 0.8964, 0.9245, 0.9471, 0.9651, 0.979, 0.9896, 0.9975, 1.0031, 1.0069, 1.0093, 1.0106, 1.0111, 1.011, 1.0105, 1.0097, 1.0088, 1.0078, 1.0068, 1.0059, 1.005, 1.0041, 1.0034, 1.0027, 1.0021, 1.0017, 1.0013, 1);
+    --spring-snappy: linear(0, 0.0215, 0.0758, 0.1502, 0.2355, 0.3248, 0.4131, 0.4972, 0.5751, 0.6455, 0.708, 0.7626, 0.8095, 0.8493, 0.8826, 0.9101, 0.9326, 0.9506, 0.965, 0.9762, 0.9849, 0.9914, 0.9962, 0.9997, 1.002, 1.0036, 1.0045, 1.0049, 1.005, 1.0049, 1.0046, 1.0042, 1.0038, 1.0033, 1.0029, 1.0025, 1.0021, 1.0017, 1.0014, 1.0012, 1);
+    --spring-soft: linear(0, 0.023, 0.0791, 0.1536, 0.2367, 0.3215, 0.4039, 0.4811, 0.5519, 0.6156, 0.672, 0.7216, 0.7646, 0.8018, 0.8336, 0.8608, 0.8838, 0.9033, 0.9196, 0.9334, 0.9449, 0.9544, 0.9624, 0.969, 0.9745, 0.9791, 0.9828, 0.9859, 0.9885, 0.9906, 0.9923, 0.9937, 0.9949, 0.9958, 0.9966, 0.9972, 0.9977, 0.9982, 0.9985, 0.9988, 1);
+  }
+}
+
+/* Content swap inside a morphing shape: exit fast, enter slightly later so they never overlap */
+@keyframes blur-enter {
+  from {
+    opacity: 0;
+    filter: blur(6px);
+    transform: translate(var(--swap-x, 0px), 4px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: none;
+  }
+}
+
+@keyframes blur-exit {
+  from {
+    opacity: 1;
+    filter: blur(0);
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    filter: blur(6px);
+    transform: translate(calc(var(--swap-x, 0px) * -1), -4px) scale(0.97);
+  }
+}
+
+.blur-enter {
+  animation: blur-enter 450ms var(--spring-snappy) both;
+  animation-delay: var(--enter-delay, 70ms);
+}
+
+.blur-exit {
+  animation: blur-exit 140ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .blur-enter,
+  .blur-exit {
+    animation-duration: 1ms;
+    animation-delay: 0ms;
+  }
+}
+
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom, 8px);
 }
@@ -57,24 +120,6 @@ body {
   animation: slide-in-left 0.35s cubic-bezier(0.32, 0.72, 0, 1) both;
 }
 
-@keyframes flag-from-left {
-  0% { transform: translateX(-20px); opacity: 0; }
-  100% { transform: translateX(0); opacity: 1; }
-}
-
-@keyframes flag-from-right {
-  0% { transform: translateX(20px); opacity: 0; }
-  100% { transform: translateX(0); opacity: 1; }
-}
-
-.animate-flag-slide-left {
-  animation: flag-from-right 0.3s cubic-bezier(0.32, 0.72, 0, 1) both;
-}
-
-.animate-flag-slide-right {
-  animation: flag-from-left 0.3s cubic-bezier(0.32, 0.72, 0, 1) both;
-}
-
 /* Dynamic Island D-day */
 .dday-island {
   border-radius: 22px;
@@ -84,7 +129,7 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.06);
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
-  animation: dday-appear 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  animation: dday-appear 690ms var(--spring-morph) both;
 }
 
 .dday-label {
@@ -102,24 +147,15 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-@keyframes weather-expand {
-  0% {
-    opacity: 0;
-    transform: scale(0.8);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
 @keyframes dday-appear {
   0% {
     opacity: 0;
-    transform: scaleX(0.6) scaleY(0.4);
+    filter: blur(6px);
+    transform: scale(0.6);
   }
   100% {
     opacity: 1;
-    transform: scaleX(1) scaleY(1);
+    filter: blur(0);
+    transform: scale(1);
   }
 }

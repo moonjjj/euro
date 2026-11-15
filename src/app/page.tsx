@@ -5,6 +5,9 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import Island from "@/components/Island";
 import WeatherIsland, { type CityInfo } from "@/components/WeatherIsland";
 import LiquidGlass from "@/components/LiquidGlass";
+import BlurSwap from "@/components/BlurSwap";
+import Ticker from "@/components/Ticker";
+import { SPRING } from "@/lib/motion";
 
 const TARGET_DATE = "2026-12-04";
 const TARGET_TIME = "2026-12-04T13:00:00+09:00"; // 12월 4일 오후 1시 KST
@@ -19,6 +22,10 @@ const CITIES: Record<string, CityInfo> = {
   florence: { name: "Florence", timezone: "Europe/Rome", lat: 43.7696, lon: 11.2558 },
   rome: { name: "Rome", timezone: "Europe/Rome", lat: 41.9028, lon: 12.4964 },
 };
+
+// Critically damped spring: no overshoot, so the page edge never shows a gap
+const SLIDE_DURATION = SPRING.soft;
+const SLIDE_EASE = "var(--spring-soft)";
 
 const DAYS = [
   { id: 0, image: "/images/cover.jpg", label: "Cover", date: "2026-12-03", flag: "✈️", isCover: true, city: null as CityInfo | null, w: 750, h: 1624, blur: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAkACQAAD/4QCARXhpZgAATU0AKgAAAAgABAEaAAUAAAABAAAAPgEbAAUAAAABAAAARgEoAAMAAAABAAIAAIdpAAQAAAABAAAATgAAAAAAAACQAAAAAQAAAJAAAAABAAOgAQADAAAAAQABAACgAgAEAAAAAQAAAAmgAwAEAAAAAQAAABQAAAAA/+0AOFBob3Rvc2hvcCAzLjAAOEJJTQQEAAAAAAAAOEJJTQQlAAAAAAAQ1B2M2Y8AsgTpgAmY7PhCfv/AABEIABQACQMBIgACEQEDEQH/xAAfAAABBQEBAQEBAQAAAAAAAAAAAQIDBAUGBwgJCgv/xAC1EAACAQMDAgQDBQUEBAAAAX0BAgMABBEFEiExQQYTUWEHInEUMoGRoQgjQrHBFVLR8CQzYnKCCQoWFxgZGiUmJygpKjQ1Njc4OTpDREVGR0hJSlNUVVZXWFlaY2RlZmdoaWpzdHV2d3h5eoOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4eLj5OXm5+jp6vHy8/T19vf4+fr/xAAfAQADAQEBAQEBAQEBAAAAAAAAAQIDBAUGBwgJCgv/xAC1EQACAQIEBAMEBwUEBAABAncAAQIDEQQFITEGEkFRB2FxEyIygQgUQpGhscEJIzNS8BVictEKFiQ04SXxFxgZGiYnKCkqNTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqCg4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2dri4+Tl5ufo6ery8/T19vf4+fr/2wBDAA8PDw8PDxoPDxokGhoaJDEkJCQkMT4xMTExMT5LPj4+Pj4+S0tLS0tLS0taWlpaWlppaWlpaXZ2dnZ2dnZ2dnb/2wBDARITEx4cHjQcHDR7VEVUe3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3v/3QAEAAH/2gAMAwEAAhEDEQA/AM3THUh1b7oxWj5tv7/lWXDbzQx+ccbTg5z+XerP9oQf88j/AJ/ClzPoPlT3P//Q5bzptgQudvpnim+Y1N7LSUhn/9k=" },
@@ -115,8 +122,6 @@ export default function Home() {
     [current, animating]
   );
 
-  const SLIDE_DURATION = 420;
-  const SLIDE_EASE = "cubic-bezier(0.25, 1, 0.5, 1)";
 
   const snapTo = useCallback((targetIndex: number) => {
     if (animating) return;
@@ -206,8 +211,11 @@ export default function Home() {
 
   const peekIndex = offsetX < 0 ? current + 1 : offsetX > 0 ? current - 1 : null;
   const peekDay = peekIndex !== null && peekIndex >= 0 && peekIndex < DAYS.length ? DAYS[peekIndex] : null;
-  const peekIsCover = peekDay?.isCover ?? false;
   const currentDay = DAYS[current];
+  const slides = [
+    { day: currentDay, isCurrent: true },
+    ...((isSwiping || animating) && peekDay ? [{ day: peekDay, isCurrent: false }] : []),
+  ];
 
   return (
     <main
@@ -219,110 +227,81 @@ export default function Home() {
       onTouchEnd={onTouchEnd}
     >
       <div className="relative overflow-hidden">
-        {/* Current image */}
-        <div
-          style={{
-            transform: `translateX(${offsetX}px)`,
-            transition: animating ? `transform ${SLIDE_DURATION}ms ${SLIDE_EASE}` : "none",
-          }}
-        >
-          {currentDay.isCover ? (
-            <div className="relative w-full" style={{ height: "100vh" }}>
-              <Image
-                key={currentDay.id}
-                data-glass-source
-                src={currentDay.image}
-                alt={currentDay.label}
-                fill
-                sizes="100vw"
-                className="object-cover"
-                priority
-                placeholder="blur"
-                blurDataURL={currentDay.blur}
-              />
-              {/* Dynamic Island D-day */}
-              {dday !== null && (
-                <div className="absolute top-0 left-0 right-0 flex justify-center z-10"
-                  style={{ paddingTop: "max(14px, calc(env(safe-area-inset-top, 0px) + 8px))" }}
-                >
-                  <LiquidGlass className="dday-island" fallbackStyle={{ background: "#000" }} shade={0.45} blur={9}>
-                    {dday.total <= 0 ? (
-                      <span className="dday-label">
-                        {dday.days === 0 && dday.hours === 0 && dday.minutes === 0
-                          ? "D-Day 🎉"
-                          : `D+${dday.days > 0 ? `${dday.days}일 ` : ""}${String(dday.hours).padStart(2, "0")}:${String(dday.minutes).padStart(2, "0")}:${String(dday.seconds).padStart(2, "0")}`}
-                      </span>
-                    ) : (
-                      <div className="flex flex-col items-center gap-0.5">
-                        <span className="dday-label">D-{dday.days}</span>
-                        <span className="dday-time">
-                          {String(dday.hours).padStart(2, "0")}:{String(dday.minutes).padStart(2, "0")}:{String(dday.seconds).padStart(2, "0")}
-                        </span>
-                      </div>
-                    )}
-                  </LiquidGlass>
-                </div>
-              )}
-            </div>
-          ) : (
-            <Image
-              key={currentDay.id}
-              data-glass-source
-              src={currentDay.image}
-              alt={currentDay.label}
-              width={currentDay.w}
-              height={currentDay.h}
-              sizes="100vw"
-              className="w-full h-auto"
-              priority
-              placeholder="blur"
-              blurDataURL={currentDay.blur}
-              style={{ height: "auto" }}
-            />
-          )}
-        </div>
-
-        {/* Peek image (adjacent day, only during swipe) */}
-        {(isSwiping || animating) && peekDay && (
+        {/* Current + adjacent day share one keyed list: when a slide finishes, the
+            peek element simply becomes the current one instead of remounting
+            (a remount re-shows the blur placeholder and the page looks like it zooms). */}
+        {slides.map(({ day, isCurrent }) => (
           <div
-            className="absolute top-0"
+            key={day.id}
+            className={isCurrent ? undefined : "absolute top-0 w-full"}
             style={{
-              width: "100vw",
-              left: offsetX < 0 ? "100%" : undefined,
-              right: offsetX > 0 ? "100%" : undefined,
+              left: !isCurrent && offsetX < 0 ? "100%" : undefined,
+              right: !isCurrent && offsetX > 0 ? "100%" : undefined,
               transform: `translateX(${offsetX}px)`,
               transition: animating ? `transform ${SLIDE_DURATION}ms ${SLIDE_EASE}` : "none",
             }}
           >
-            {peekIsCover ? (
+            {day.isCover ? (
               <div className="relative w-full" style={{ height: "100vh" }}>
                 <Image
                   data-glass-source
-                  src={peekDay.image}
-                  alt={peekDay.label}
+                  src={day.image}
+                  alt={day.label}
                   fill
                   sizes="100vw"
                   className="object-cover"
+                  priority={isCurrent}
                   placeholder="blur"
-                  blurDataURL={peekDay.blur}
+                  blurDataURL={day.blur}
                 />
+                  {/* Dynamic Island D-day */}
+                  {dday !== null && (
+                    <div className="absolute top-0 left-0 right-0 flex justify-center z-10"
+                      style={{ paddingTop: "max(14px, calc(env(safe-area-inset-top, 0px) + 8px))" }}
+                    >
+                      <LiquidGlass className="dday-island" fallbackStyle={{ background: "#000" }} shade={0.45} blur={9}>
+                        {/* D+ (one line) ⇄ D- (two lines) swap with a blur; digits tick on their own */}
+                        <BlurSwap
+                          swapKey={dday.total <= 0 ? "after" : "before"}
+                          layerClassName="flex flex-col items-center gap-0.5"
+                          render={(mode) => {
+                            const clock = `${String(dday.hours).padStart(2, "0")}:${String(dday.minutes).padStart(2, "0")}:${String(dday.seconds).padStart(2, "0")}`;
+                            if (mode === "after") {
+                              return dday.days === 0 && dday.hours === 0 && dday.minutes === 0 ? (
+                                <span className="dday-label">D-Day 🎉</span>
+                              ) : (
+                                <Ticker className="dday-label" value={`D+${dday.days > 0 ? `${dday.days}일 ` : ""}${clock}`} />
+                              );
+                            }
+                            return (
+                              <>
+                                <Ticker className="dday-label" value={`D-${dday.days}`} />
+                                <Ticker className="dday-time" value={clock} />
+                              </>
+                            );
+                          }}
+                        />
+                      </LiquidGlass>
+                    </div>
+                  )}
               </div>
             ) : (
               <Image
                 data-glass-source
-                src={peekDay.image}
-                alt={peekDay.label}
-                width={peekDay.w}
-                height={peekDay.h}
+                src={day.image}
+                alt={day.label}
+                width={day.w}
+                height={day.h}
                 sizes="100vw"
                 className="w-full h-auto"
+                priority={isCurrent}
                 placeholder="blur"
-                blurDataURL={peekDay.blur}
+                blurDataURL={day.blur}
                 style={{ height: "auto" }}
               />
             )}
           </div>
-        )}
+        ))}
       </div>
 
       {/* Bottom spacer — hide on cover */}

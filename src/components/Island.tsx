@@ -2,6 +2,8 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import LiquidGlass from "./LiquidGlass";
+import BlurSwap from "./BlurSwap";
+import { spring, EXIT_MS } from "@/lib/motion";
 
 interface DayInfo {
   id: number;
@@ -32,11 +34,10 @@ function getWeekday(dateStr: string) {
   return WEEKDAYS[d.getDay()];
 }
 
-function FlagBadge({ flag, slideDir }: { flag: string; slideDir?: "left" | "right" }) {
-  const cls = slideDir === "left" ? "animate-flag-slide-left" : slideDir === "right" ? "animate-flag-slide-right" : "";
+function FlagBadge({ flag }: { flag: string }) {
   return (
     <span
-      className={`text-2xl inline-flex items-center justify-center shrink-0 drop-shadow-[0_1px_2px_rgba(0,0,0,0.3)] ${cls}`}
+      className="text-2xl inline-flex items-center justify-center shrink-0 drop-shadow-[0_1px_2px_rgba(0,0,0,0.3)]"
       style={{ filter: "contrast(1.1) saturate(1.2)" }}
     >
       {flag}
@@ -51,48 +52,66 @@ const glassFallback: React.CSSProperties = {
 };
 
 const BAR_HEIGHT = 56;
-const NAV_SIZE = BAR_HEIGHT + 2;
+const BORDER = 1;
+const NAV_SIZE = BAR_HEIGHT + BORDER * 2;
 const NAV_GAP = 8;
+const ROW_HEIGHT = 56;
+const ROW_GAP = 2;
+// Time for the active indicator to travel before the island closes on a pick
+const PICK_MS = 260;
 
-// Open:  collapsed → stretching → expanded
-// Close: expanded → dropping → shrinking → collapsed
-type Phase = "collapsed" | "stretching" | "expanded" | "dropping" | "shrinking";
+// One shape, never cut: collapsed ⇄ open morph size/radius on a spring.
+// Closing first blurs the content out, then shrinks, so text never overlaps the morph.
+type Phase = "collapsed" | "open" | "closing";
 
 export default function Island({ days, current, onSelect, onPrev, onNext, slideDir, todayIndex }: IslandProps) {
   const [phase, setPhase] = useState<Phase>("collapsed");
+  const [openCount, setOpenCount] = useState(0);
+  const [pending, setPending] = useState<number | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const listScrollRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState(0);
-
-  const currentDay = days[current];
+  const timers = useRef<number[]>([]);
 
   useEffect(() => {
-    if (contentRef.current) {
-      setContentHeight(contentRef.current.scrollHeight);
-    }
-  }, [phase, days.length]);
+    const el = contentRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => setContentHeight(entry.borderBoxSize[0].blockSize));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const pendingTimers = timers.current;
+    return () => pendingTimers.forEach(clearTimeout);
+  }, []);
+
+  // Long trips scroll: bring the current day into the middle of the list on open
+  useEffect(() => {
+    const el = listScrollRef.current;
+    if (!el || openCount === 0) return;
+    el.scrollTop = current * (ROW_HEIGHT + ROW_GAP) - (el.clientHeight - ROW_HEIGHT) / 2;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on open
+  }, [openCount]);
 
   const expand = useCallback(() => {
-    setPhase("stretching");
-    setTimeout(() => setPhase("expanded"), 400);
+    setOpenCount((n) => n + 1);
+    setPhase("open");
   }, []);
 
   const collapse = useCallback(() => {
-    setPhase("dropping");
-    setTimeout(() => setPhase("shrinking"), 300);
-    setTimeout(() => setPhase("collapsed"), 850);
+    setPhase("closing");
+    timers.current.push(window.setTimeout(() => setPhase("collapsed"), EXIT_MS));
   }, []);
 
   const toggle = () => {
     if (phase === "collapsed") expand();
-    else if (phase === "expanded") collapse();
+    else if (phase === "open") collapse();
   };
-
-  const isWide = phase !== "collapsed" && phase !== "shrinking";
-  const showContent = phase === "expanded" || phase === "dropping";
 
   // Close on outside tap
   useEffect(() => {
-    if (phase !== "expanded") return;
+    if (phase !== "open") return;
     const handler = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       if (!target.closest("[data-island]")) collapse();
@@ -101,71 +120,66 @@ export default function Island({ days, current, onSelect, onPrev, onNext, slideD
     return () => document.removeEventListener("click", handler);
   }, [phase, collapse]);
 
+  const pick = (i: number) => {
+    if (phase !== "open" || pending !== null) return;
+    if (i === current) {
+      collapse();
+      return;
+    }
+    // Let the liquid indicator travel to the row, then close and navigate
+    setPending(i);
+    timers.current.push(
+      window.setTimeout(() => {
+        collapse();
+        onSelect(i);
+        setPending(null);
+      }, PICK_MS)
+    );
+  };
+
+  const isOpen = phase !== "collapsed";
+  const showNavButtons = phase === "collapsed";
+  const hasPrev = current > 0;
+  const hasNext = current < days.length - 1;
+  const selected = pending ?? current;
+
+  // Liquid indicator: the edge in the direction of travel rides the snappy spring,
+  // the trailing edge the soft one, so it stretches ahead and then catches up.
+  const [indicator, setIndicator] = useState({ index: selected, dir: 0 });
+  if (indicator.index !== selected) {
+    setIndicator({ index: selected, dir: selected > indicator.index ? 1 : -1 });
+  }
+  const listHeight = days.length * ROW_HEIGHT + (days.length - 1) * ROW_GAP;
+  const indicatorTop = selected * (ROW_HEIGHT + ROW_GAP);
+  const indicatorBottom = listHeight - indicatorTop - ROW_HEIGHT;
+  const leading = indicator.dir > 0 ? "bottom" : "top";
+  const trailing = indicator.dir > 0 ? "top" : "bottom";
+
   const wide = "min(340px, calc(100vw - 40px))";
   // Leave room for both arrow slots so the pill never gets squeezed on narrow phones
   const pill = `min(280px, calc(100vw - 40px - ${2 * (NAV_SIZE + NAV_GAP)}px))`;
-  const spring = "cubic-bezier(0.34, 1.56, 0.64, 1)";
-  const smooth = "cubic-bezier(0.4, 0, 0.2, 1)";
+  const openHeight = BAR_HEIGHT + contentHeight + BORDER * 2;
+  const isTodayShown = current === todayIndex && isOpen;
 
-  const getStyle = (): React.CSSProperties => {
-    switch (phase) {
-      case "collapsed":
-        return {
-          width: pill,
-          borderRadius: "40px",
-          transform: "translateY(0) scale(1)",
-          transition: `all 0.55s ${smooth}`,
-        };
-      case "stretching":
-        return {
-          width: wide,
-          borderRadius: "26px",
-          transform: "translateY(2px) scaleX(1.04) scaleY(0.96)",
-          transition: `all 0.4s ${spring}`,
-        };
-      case "expanded":
-        return {
-          width: wide,
-          borderRadius: "28px",
-          transform: "translateY(-14px) scale(1)",
-          transition: `all 0.5s ${spring}`,
-        };
-      case "dropping":
-        return {
-          width: wide,
-          borderRadius: "28px",
-          transform: "translateY(0) scaleX(1.01) scaleY(0.99)",
-          transition: `all 0.35s ${smooth}`,
-        };
-      case "shrinking":
-        return {
-          width: pill,
-          borderRadius: "40px",
-          transform: "translateY(0) scale(1)",
-          transition: `all 0.55s ${smooth}`,
-        };
-    }
-  };
-
-  const hasPrev = current > 0;
-  const hasNext = current < days.length - 1;
-  const showNavButtons = phase === "collapsed" || phase === "shrinking";
-
-  // Arrows match the island's outer height (bar + 1px border top/bottom) and
-  // slide out sideways, collapsing their width, while the island is open.
-  // `occupy` keeps the slot while collapsed (so first/last pages stay centered);
-  // `visible` hides the arrow itself when there is no prev/next day.
+  // Arrows keep their slot while collapsed (first/last pages stay centered),
+  // and slide out sideways, collapsing their width, while the island is open.
   const navStyle = (occupy: boolean, visible: boolean, side: -1 | 1): React.CSSProperties => ({
     width: occupy ? NAV_SIZE : 0,
     height: NAV_SIZE,
     [side < 0 ? "marginRight" : "marginLeft"]: occupy ? NAV_GAP : 0,
-    borderWidth: occupy ? 1 : 0,
+    borderWidth: occupy ? BORDER : 0,
     boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
     opacity: visible ? 1 : 0,
     transform: visible ? "translateX(0) scale(1)" : `translateX(${side * 32}px) scale(0.5)`,
+    filter: visible ? "blur(0)" : "blur(4px)",
     visibility: visible ? "visible" : "hidden",
     pointerEvents: visible ? "auto" : "none",
-    transition: `width 0.35s ${smooth}, margin 0.35s ${smooth}, border-width 0.35s ${smooth}, opacity 0.25s ease, transform 0.35s ${smooth}, visibility 0s linear ${visible ? "0s" : "0.35s"}`,
+    transition: [
+      spring(["width", "margin", "border-width"], "morph"),
+      spring(["transform", "scale"], "snappy"),
+      visible ? spring(["opacity", "filter"], "snappy", 80) : `opacity ${EXIT_MS}ms ease-in, filter ${EXIT_MS}ms ease-in`,
+      `visibility 0s linear ${visible ? 0 : 450}ms`,
+    ].join(", "),
   });
 
   return (
@@ -196,13 +210,13 @@ export default function Island({ days, current, onSelect, onPrev, onNext, slideD
         shade={0.45}
         blur={9}
         style={{
-          ...getStyle(),
-          boxShadow: phase === "expanded"
+          width: isOpen ? wide : pill,
+          height: isOpen ? openHeight : NAV_SIZE,
+          borderRadius: isOpen ? 26 : NAV_SIZE / 2,
+          boxShadow: isOpen
             ? "0 20px 60px rgba(0,0,0,0.85), 0 0 0 0.5px rgba(255,255,255,0.08)"
-            : phase === "stretching" || phase === "dropping"
-            ? "0 12px 40px rgba(0,0,0,0.75)"
             : "0 8px 28px rgba(0,0,0,0.5)",
-          transformOrigin: "center bottom",
+          transition: spring(["width", "height", "border-radius", "box-shadow"], "morph"),
         }}
       >
         {/* Pill bar */}
@@ -211,23 +225,34 @@ export default function Island({ days, current, onSelect, onPrev, onNext, slideD
           className="flex items-center gap-2 px-4 w-full min-w-0 active:opacity-70 transition-opacity overflow-hidden"
           style={{ height: BAR_HEIGHT }}
         >
-          <FlagBadge key={current} flag={currentDay.flag} slideDir={slideDir} />
-          <span className="text-white text-[13px] font-semibold tracking-tight whitespace-nowrap shrink-0">
-            {currentDay.label}
-          </span>
-          <span className="text-white/70 text-xs whitespace-nowrap truncate min-w-0">
-            {formatShort(currentDay.date)} ({getWeekday(currentDay.date)})
-          </span>
+          <BlurSwap
+            swapKey={current}
+            className="min-w-0 items-center"
+            layerClassName="flex items-center gap-2 min-w-0"
+            style={{ ["--swap-x" as string]: slideDir === "left" ? "14px" : "-14px" }}
+            render={(i) => (
+              <>
+                <FlagBadge flag={days[i].flag} />
+                <span className="text-white text-[13px] font-semibold tracking-tight whitespace-nowrap shrink-0">
+                  {days[i].label}
+                </span>
+                <span className="text-white/70 text-xs whitespace-nowrap truncate min-w-0">
+                  {formatShort(days[i].date)} ({getWeekday(days[i].date)})
+                </span>
+              </>
+            )}
+          />
           {current === todayIndex && (
             <span
               className="text-[10px] font-semibold text-[#00FF66] bg-[#00FF66]/10 py-0.5 rounded-md whitespace-nowrap overflow-hidden shrink-0"
               style={{
                 // Fully collapse (padding + flex gap too) so the date keeps its room
-                maxWidth: phase === "shrinking" || phase === "collapsed" ? "0px" : "40px",
-                paddingInline: phase === "shrinking" || phase === "collapsed" ? 0 : 6,
-                marginLeft: phase === "shrinking" || phase === "collapsed" ? -8 : 0,
-                opacity: phase === "shrinking" || phase === "collapsed" ? 0 : 1,
-                transition: "max-width 0.3s ease, padding 0.3s ease, margin 0.3s ease, opacity 0.2s ease",
+                maxWidth: isTodayShown ? 40 : 0,
+                paddingInline: isTodayShown ? 6 : 0,
+                marginLeft: isTodayShown ? 0 : -8,
+                opacity: isTodayShown ? 1 : 0,
+                filter: isTodayShown ? "blur(0)" : "blur(4px)",
+                transition: spring(["max-width", "padding", "margin", "opacity", "filter"], "snappy", isTodayShown ? 120 : 0),
               }}
             >
               오늘
@@ -236,8 +261,8 @@ export default function Island({ days, current, onSelect, onPrev, onNext, slideD
           <svg
             className="w-3 h-3 text-white/60 ml-auto shrink-0"
             style={{
-              transform: isWide ? "rotate(180deg)" : "rotate(0deg)",
-              transition: "transform 0.5s cubic-bezier(0.32, 0.72, 0, 1)",
+              transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
+              transition: spring("transform", "snappy"),
             }}
             fill="none"
             viewBox="0 0 24 24"
@@ -248,74 +273,89 @@ export default function Island({ days, current, onSelect, onPrev, onNext, slideD
           </svg>
         </button>
 
-        {/* Expandable content */}
+        {/* Expandable content — always mounted so its height is known before opening */}
         <div
-          style={{
-            maxHeight: phase === "expanded" ? `${contentHeight}px` : "0px",
-            opacity: phase === "expanded" ? 1 : phase === "dropping" ? 0 : 0,
-            transition: phase === "expanded"
-              ? "max-height 0.5s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.35s ease 0.05s"
-              : "max-height 0.25s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.15s ease",
-          }}
-          className="overflow-hidden"
+          ref={contentRef}
+          inert={phase !== "open"}
+          className={`px-4 pb-4 ${phase === "closing" ? "blur-exit" : ""}`}
+          style={{ visibility: phase === "collapsed" ? "hidden" : "visible" }}
         >
-          <div ref={contentRef} className="px-4 pb-4">
-            <div className="h-px bg-white/[0.06] mb-3" />
+          <div className="h-px bg-white/[0.06] mb-3" />
 
-            <div className="space-y-0.5 overflow-y-auto overscroll-contain" style={{ maxHeight: "45vh", scrollbarWidth: "none", msOverflowStyle: "none" } as React.CSSProperties}>
-              {days.map((day, i) => {
-                const isActive = i === current;
-                const isToday = i === todayIndex;
-                return (
-                  <button
-                    key={day.id}
-                    onClick={() => {
-                      onSelect(i);
-                      collapse();
-                    }}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-[14px] active:scale-[0.98] ${
-                      isActive ? "bg-white/[0.08]" : ""
-                    }`}
-                    style={{
-                      transition: "background 0.2s ease, transform 0.15s ease",
-                    }}
+          <div
+            ref={listScrollRef}
+            className="overflow-y-auto overscroll-contain"
+            style={{ maxHeight: "45vh", scrollbarWidth: "none" }}
+          >
+          {/* Remounted on each open so the rows replay their staggered entrance */}
+          <div key={openCount} className="relative" style={{ height: listHeight }}>
+            {/* Liquid active indicator */}
+            <div
+              className="absolute left-0 right-0 rounded-[14px] bg-white/[0.08]"
+              style={{
+                top: indicatorTop,
+                bottom: indicatorBottom,
+                transition: `${spring(leading, "snappy")}, ${spring(trailing, "soft")}`,
+              }}
+            />
+
+            {days.map((day, i) => {
+              const isActive = i === selected;
+              const isToday = i === todayIndex;
+              return (
+                <button
+                  key={day.id}
+                  onClick={() => pick(i)}
+                  className={`absolute left-0 right-0 flex items-center gap-3 px-3 rounded-[14px] active:scale-[0.98] ${
+                    phase === "open" ? "blur-enter" : ""
+                  }`}
+                  style={{
+                    top: i * (ROW_HEIGHT + ROW_GAP),
+                    height: ROW_HEIGHT,
+                    ["--enter-delay" as string]: `${90 + Math.min(Math.abs(i - current), 6) * 35}ms`,
+                    transition: spring("scale", "snappy"),
+                  }}
+                >
+                  <div
+                    className={`w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0 ${
+                      isActive ? "bg-white/[0.12]" : "bg-white/[0.05]"
+                    } ${isToday ? "ring-1 ring-[#00FF66]/40" : ""}`}
+                    style={{ transition: spring("background-color", "snappy") }}
                   >
-                    <div
-                      className={`w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0 ${
-                        isActive ? "bg-white/[0.12]" : "bg-white/[0.05]"
-                      } ${isToday ? "ring-1 ring-[#00FF66]/40" : ""}`}
-                      style={{ transition: "background 0.2s ease" }}
-                    >
-                      <FlagBadge flag={day.flag} />
-                    </div>
+                    <FlagBadge flag={day.flag} />
+                  </div>
 
-                    <div className="flex-1 text-left">
-                      <div className="flex items-center gap-1.5">
-                        <span
-                          className={`text-[13px] font-medium ${
-                            isActive ? "text-white" : "text-white/75"
-                          }`}
-                        >
-                          {day.label}
-                        </span>
-                        {isToday && (
-                          <span className="text-[9px] font-semibold text-[#00FF66] bg-[#00FF66]/10 px-1.5 py-0.5 rounded-md">
-                            오늘
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-[10px] text-white/60">
-                        {formatShort(day.date)} ({getWeekday(day.date)})
+                  <div className="flex-1 text-left">
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={`text-[13px] font-medium ${isActive ? "text-white" : "text-white/75"}`}
+                        style={{ transition: spring("color", "snappy") }}
+                      >
+                        {day.label}
                       </span>
+                      {isToday && (
+                        <span className="text-[9px] font-semibold text-[#00FF66] bg-[#00FF66]/10 px-1.5 py-0.5 rounded-md">
+                          오늘
+                        </span>
+                      )}
                     </div>
+                    <span className="text-[10px] text-white/60">
+                      {formatShort(day.date)} ({getWeekday(day.date)})
+                    </span>
+                  </div>
 
-                    {isActive && (
-                      <div className="w-1.5 h-1.5 rounded-full bg-[#00FF66] shadow-[0_0_6px_rgba(0,255,102,0.4)]" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+                  <div
+                    className="w-1.5 h-1.5 rounded-full bg-[#00FF66] shadow-[0_0_6px_rgba(0,255,102,0.4)]"
+                    style={{
+                      opacity: isActive ? 1 : 0,
+                      transform: isActive ? "scale(1)" : "scale(0)",
+                      transition: spring(["opacity", "transform"], "snappy"),
+                    }}
+                  />
+                </button>
+              );
+            })}
+          </div>
           </div>
         </div>
       </LiquidGlass>

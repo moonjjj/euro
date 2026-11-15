@@ -2,6 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import LiquidGlass from "./LiquidGlass";
+import BlurSwap from "./BlurSwap";
+import Ticker from "./Ticker";
+import { spring, EXIT_MS } from "@/lib/motion";
 
 export interface CityInfo {
   name: string;
@@ -83,7 +86,11 @@ function getLocalHour(timezone: string): number {
 export default function WeatherIsland({ city }: WeatherIslandProps) {
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [localTime, setLocalTime] = useState("");
-  const [expanded, setExpanded] = useState(false);
+  // collapsed ⇄ open morph one shape; closing blurs content out before shrinking
+  const [phase, setPhase] = useState<"collapsed" | "open" | "closing">("collapsed");
+  const [contentHeight, setContentHeight] = useState(0);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const closeTimer = useRef<number | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -158,32 +165,50 @@ export default function WeatherIsland({ city }: WeatherIslandProps) {
   // Fetch weather when city changes
   useEffect(() => {
     if (!city) return;
-    setExpanded(false);
+    setPhase("collapsed");
     fetchWeather(city);
   }, [city, fetchWeather]);
 
-  // Scroll to "now" when expanded
+  const expanded = phase === "open";
+
+  const open = () => {
+    window.clearTimeout(closeTimer.current);
+    if (scrollRef.current) scrollRef.current.scrollLeft = 0;
+    setPhase("open");
+  };
+
+  const close = useCallback(() => {
+    setPhase("closing");
+    window.clearTimeout(closeTimer.current);
+    closeTimer.current = window.setTimeout(() => setPhase("collapsed"), EXIT_MS);
+  }, []);
+
+  useEffect(() => () => window.clearTimeout(closeTimer.current), []);
+
+  // Expanded content stays mounted (hidden) so the open height is known up front
   useEffect(() => {
-    if (expanded && scrollRef.current) {
-      scrollRef.current.scrollLeft = 0;
-    }
-  }, [expanded]);
+    const el = contentRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => setContentHeight(entry.borderBoxSize[0].blockSize));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [city]);
 
   // Close on outside tap
   useEffect(() => {
     if (!expanded) return;
     const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setExpanded(false);
-      }
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) close();
     };
     document.addEventListener("click", handler);
     return () => document.removeEventListener("click", handler);
-  }, [expanded]);
+  }, [expanded, close]);
 
   if (!city) return null;
 
   const info = weather ? getWeatherInfo(weather.weatherCode) : null;
+  const isOpen = phase !== "collapsed";
+  const OPEN_WIDTH = "min(320px, calc(100vw - 28px))";
 
   return (
     <div
@@ -195,7 +220,7 @@ export default function WeatherIsland({ city }: WeatherIslandProps) {
       }}
     >
       <LiquidGlass
-        className="cursor-pointer overflow-hidden border border-white/[0.06]"
+        className="relative cursor-pointer overflow-hidden border border-white/[0.06]"
         fallbackStyle={{
           background: "rgba(0,0,0,0.8)",
           WebkitBackdropFilter: "blur(40px) saturate(180%)",
@@ -204,116 +229,128 @@ export default function WeatherIsland({ city }: WeatherIslandProps) {
         shade={0.45}
         blur={9}
         style={{
-          borderRadius: expanded ? "22px" : "50%",
-          width: expanded ? "min(320px, calc(100vw - 28px))" : "44px",
-          height: expanded ? "auto" : "44px",
+          // Same radius in both states: the circle simply grows into the card
+          borderRadius: 22,
+          width: isOpen ? OPEN_WIDTH : 44,
+          height: isOpen ? Math.max(44, contentHeight + 2) : 44,
           textShadow: "0 1px 3px rgba(0,0,0,0.45)",
-          boxShadow: expanded
+          boxShadow: isOpen
             ? "0 12px 40px rgba(0,0,0,0.7), 0 0 0 0.5px rgba(255,255,255,0.08)"
             : "0 4px 16px rgba(0,0,0,0.5)",
-          transition: "all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)",
-          transformOrigin: "top right",
+          transition: spring(["width", "height", "box-shadow"], "morph"),
         }}
       >
-        {/* Collapsed: weather icon + temp */}
-        {!expanded && (
-          <div
-            className="w-[44px] h-[44px] flex items-center justify-center"
-            onClick={() => setExpanded(true)}
-          >
-            {loading ? (
-              <div className="w-4 h-4 border-2 border-white/30 border-t-white/80 rounded-full animate-spin" />
-            ) : info ? (
-              <span className="text-lg">{info.icon}</span>
-            ) : (
-              <span className="text-lg">🌡</span>
-            )}
-          </div>
-        )}
+        {/* Collapsed: weather icon */}
+        <div
+          className={`absolute top-0 right-0 w-[42px] h-[42px] flex items-center justify-center ${
+            phase === "collapsed" ? "blur-enter" : "blur-exit"
+          }`}
+          style={{ pointerEvents: isOpen ? "none" : "auto" }}
+          onClick={open}
+        >
+          <BlurSwap
+            swapKey={loading ? "loading" : info ? info.icon : "none"}
+            render={(k) =>
+              k === "loading" ? (
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white/80 rounded-full animate-spin" />
+              ) : (
+                <span className="text-lg">{k === "none" ? "🌡" : k}</span>
+              )
+            }
+          />
+        </div>
 
-        {/* Expanded content */}
-        {expanded && (
-          <div
-            style={{
-              animation: "weather-expand 0.3s cubic-bezier(0.32, 0.72, 0, 1) both",
-            }}
-          >
-            {/* Header: city + time + current weather */}
-            <div className="px-4 pt-3 pb-2" onClick={() => setExpanded(false)}>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-white/75 text-[10px] font-medium tracking-wide uppercase">
-                  {city.name}
-                </span>
-                <span className="text-white text-[13px] font-semibold tabular-nums">
-                  {localTime}
-                </span>
-              </div>
-              {weather && info && (
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl">{info.icon}</span>
-                  <span className="text-white text-[22px] font-semibold leading-tight">
-                    {weather.temperature}°
-                  </span>
-                  <span className="text-white/70 text-[11px]">{info.label}</span>
-                </div>
-              )}
-              {loading && !weather && (
-                <div className="flex items-center gap-2 py-1">
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white/80 rounded-full animate-spin" />
-                  <span className="text-white/70 text-xs">로딩 중...</span>
-                </div>
-              )}
+        {/* Expanded content — fixed width, anchored right, revealed as the shape grows */}
+        <div
+          ref={contentRef}
+          inert={!expanded}
+          className={`absolute top-0 right-0 ${expanded ? "blur-enter" : phase === "closing" ? "blur-exit" : ""}`}
+          style={{
+            width: `calc(${OPEN_WIDTH} - 2px)`,
+            visibility: phase === "collapsed" ? "hidden" : "visible",
+            ["--enter-delay" as string]: "90ms",
+          }}
+        >
+          {/* Header: city + time + current weather */}
+          <div className="px-4 pt-3 pb-2" onClick={close}>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-white/75 text-[10px] font-medium tracking-wide uppercase">
+                {city.name}
+              </span>
+              <Ticker value={localTime} className="text-white text-[13px] font-semibold" />
             </div>
-
-            {/* Divider */}
-            <div className="mx-4 h-px bg-white/[0.08]" />
-
-            {/* Hourly forecast - horizontal scroll */}
-            {weather && weather.hourly.length > 0 && (
-              <div
-                ref={scrollRef}
-                className="flex gap-0 overflow-x-auto py-3 px-2 scrollbar-none"
-                onTouchStart={(e) => e.stopPropagation()}
-                onTouchMove={(e) => e.stopPropagation()}
-                style={{
-                  scrollbarWidth: "none",
-                  msOverflowStyle: "none",
-                }}
-              >
-                {weather.hourly.map((h, i) => {
-                  const hInfo = getWeatherInfo(h.weatherCode);
-                  return (
-                    <div
-                      key={i}
-                      className="flex flex-col items-center shrink-0 px-2.5 gap-1.5"
-                      style={{
-                        opacity: h.isNow ? 1 : 0.8,
-                      }}
-                    >
-                      <span
-                        className={`text-[10px] tabular-nums ${
-                          h.isNow
-                            ? "text-[#00FF66] font-semibold"
-                            : "text-white/70 font-medium"
-                        }`}
-                      >
-                        {h.isNow ? "지금" : h.hour.replace(":00", "시")}
-                      </span>
-                      <span className="text-base">{hInfo.icon}</span>
-                      <span
-                        className={`text-[11px] font-semibold tabular-nums ${
-                          h.isNow ? "text-white" : "text-white/70"
-                        }`}
-                      >
-                        {h.temperature}°
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            <BlurSwap
+              swapKey={weather && info ? `${info.icon}${weather.temperature}` : loading ? "loading" : "none"}
+              layerClassName="flex items-center gap-2"
+              render={(k) =>
+                weather && info && k !== "loading" && k !== "none" ? (
+                  <>
+                    <span className="text-2xl">{info.icon}</span>
+                    <span className="text-white text-[22px] font-semibold leading-tight">
+                      {weather.temperature}°
+                    </span>
+                    <span className="text-white/70 text-[11px]">{info.label}</span>
+                  </>
+                ) : k === "loading" ? (
+                  <span className="flex items-center gap-2 py-1">
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white/80 rounded-full animate-spin" />
+                    <span className="text-white/70 text-xs">로딩 중...</span>
+                  </span>
+                ) : null
+              }
+            />
           </div>
-        )}
+
+          {/* Divider */}
+          <div className="mx-4 h-px bg-white/[0.08]" />
+
+          {/* Hourly forecast - horizontal scroll */}
+          {weather && weather.hourly.length > 0 && (
+            <div
+              ref={scrollRef}
+              className="flex gap-0 overflow-x-auto py-3 px-2 scrollbar-none"
+              onTouchStart={(e) => e.stopPropagation()}
+              onTouchMove={(e) => e.stopPropagation()}
+              style={{
+                scrollbarWidth: "none",
+                msOverflowStyle: "none",
+              }}
+            >
+              {weather.hourly.map((h, i) => {
+                const hInfo = getWeatherInfo(h.weatherCode);
+                return (
+                  <div
+                    key={i}
+                    className={`flex flex-col items-center shrink-0 px-2.5 gap-1.5 ${expanded ? "blur-enter" : ""}`}
+                    style={{
+                      opacity: h.isNow ? 1 : 0.8,
+                      // Stagger only the first visible columns; the rest are off-screen
+                      ["--enter-delay" as string]: `${140 + Math.min(i, 7) * 30}ms`,
+                    }}
+                  >
+                    <span
+                      className={`text-[10px] tabular-nums ${
+                        h.isNow
+                          ? "text-[#00FF66] font-semibold"
+                          : "text-white/70 font-medium"
+                      }`}
+                    >
+                      {h.isNow ? "지금" : h.hour.replace(":00", "시")}
+                    </span>
+                    <span className="text-base">{hInfo.icon}</span>
+                    <span
+                      className={`text-[11px] font-semibold tabular-nums ${
+                        h.isNow ? "text-white" : "text-white/70"
+                      }`}
+                    >
+                      {h.temperature}°
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </LiquidGlass>
     </div>
   );
